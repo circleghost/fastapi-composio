@@ -14,14 +14,15 @@ app.add_middleware(
 )
 
 COMPOSIO_API_KEY = os.getenv("COMPOSIO_API_KEY")
-BASE_URL = "https://backend.composio.dev/api/v1"
+BASE_URL = "https://backend.composio.dev/api/v3"  # ← 改成 v3
 
 @app.get("/")
 def read_root():
     return {
         "status": "ok",
         "service": "Composio OAuth API",
-        "version": "3.0.0"
+        "version": "3.0.0",
+        "api_version": "v3"
     }
 
 @app.post("/create-auth-link")
@@ -30,18 +31,19 @@ async def create_auth_link(user_id: str = Query(..., description="使用者 ID")
     try:
         async with httpx.AsyncClient() as client:
             response = await client.post(
-                f"{BASE_URL}/connectedAccounts",
+                f"{BASE_URL}/connected_accounts",  # ← 注意：v3 用底線
                 headers={
                     "X-API-Key": COMPOSIO_API_KEY,
                     "Content-Type": "application/json"
                 },
                 json={
-                    "integrationId": "googlesheets",
-                    "userUuid": user_id
+                    "integration": "googlesheets",  # ← v3 用 integration
+                    "entityId": user_id,             # ← v3 用 entityId
+                    "data": {}                       # ← v3 需要 data 欄位
                 }
             )
             
-            if response.status_code != 200:
+            if response.status_code not in [200, 201]:
                 raise HTTPException(
                     status_code=response.status_code,
                     detail=f"Composio API 錯誤: {response.text}"
@@ -54,7 +56,7 @@ async def create_auth_link(user_id: str = Query(..., description="使用者 ID")
                 "connection_id": data.get("id"),
                 "user_id": user_id
             }
-    except Exception as e:
+    except httpx.HTTPError as e:
         raise HTTPException(
             status_code=500,
             detail=f"建立授權連結失敗: {str(e)}"
@@ -66,12 +68,12 @@ async def check_connection(user_id: str):
     try:
         async with httpx.AsyncClient() as client:
             response = await client.get(
-                f"{BASE_URL}/connectedAccounts",
+                f"{BASE_URL}/connected_accounts",  # ← v3 用底線
                 headers={
                     "X-API-Key": COMPOSIO_API_KEY
                 },
                 params={
-                    "user_uuid": user_id
+                    "entityId": user_id  # ← v3 用 entityId
                 }
             )
             
