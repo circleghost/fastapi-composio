@@ -13,68 +13,50 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# 環境變數
 COMPOSIO_API_KEY = os.getenv("COMPOSIO_API_KEY")
-AUTH_CONFIG_ID = os.getenv("AUTH_CONFIG_ID")  # 從 Composio Dashboard 取得
+AUTH_CONFIG_ID = os.getenv("AUTH_CONFIG_ID")
 
-# 初始化 Composio
 composio_client = Composio(api_key=COMPOSIO_API_KEY)
 
 @app.get("/")
 def read_root():
-    return {
-        "status": "ok",
-        "service": "Composio OAuth API",
-        "version": "1.0.0"
-    }
+    return {"status": "ok", "service": "Composio OAuth API"}
 
 @app.post("/create-auth-link")
-async def create_auth_link(user_id: str = Query(..., description="使用者 ID")):
+async def create_auth_link(user_id: str = Query(...)):
     """為使用者建立 Google Sheets 授權連結"""
     try:
-        # 根據官方文件的正確寫法
-        connection_request = composio_client.connected_accounts.initiate(
-            user_id=user_id,
-            auth_config_id=AUTH_CONFIG_ID  # 必須從 Dashboard 取得
-        )
+        # 方法 1: 嘗試使用 create_connected_account (新版 API)
+        try:
+            connection_request = composio_client.create_connected_account(
+                user_id=user_id,
+                integration=AUTH_CONFIG_ID
+            )
+        except AttributeError:
+            # 方法 2: 如果沒有 create_connected_account，使用舊版 API
+            connection_request = composio_client.connected_accounts.create(
+                entity_id=user_id,
+                integration_id=AUTH_CONFIG_ID
+            )
         
         return {
             "success": True,
             "redirect_url": connection_request.redirectUrl,
-            "connection_id": connection_request.id,
             "user_id": user_id
         }
     except Exception as e:
-        raise HTTPException(
-            status_code=500, 
-            detail=f"建立授權連結失敗: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail=f"錯誤: {str(e)}")
 
 @app.get("/check-connection/{user_id}")
 async def check_connection(user_id: str):
-    """檢查使用者是否已授權 Google Sheets"""
+    """檢查使用者是否已授權"""
     try:
-        # list() 使用 user_id 參數
-        accounts = composio_client.connected_accounts.list(user_id=user_id)
+        accounts = composio_client.connected_accounts.list(entity_id=user_id)
         
-        for account in accounts.items:
-            if account.status == "ACTIVE":
-                return {
-                    "connected": True,
-                    "account_id": account.id,
-                    "user_id": user_id
-                }
+        for account in accounts:
+            if hasattr(account, 'status') and account.status == "ACTIVE":
+                return {"connected": True, "account_id": account.id}
         
-        return {
-            "connected": False,
-            "user_id": user_id
-        }
+        return {"connected": False}
     except Exception as e:
-        raise HTTPException(
-            status_code=500,
-            detail=f"檢查連線失敗: {str(e)}"
-        )
-
-@app.get("/health")
-def health_check():
-    return {"status": "healthy"}
+        raise HTTPException(status_code=500, detail=f"錯誤: {str(e)}")
