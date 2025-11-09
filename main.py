@@ -1,8 +1,12 @@
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import HTMLResponse
+from fastapi.templating import Jinja2Templates
+from starlette.requests import Request
 import httpx, os
 
 app = FastAPI(title="Composio OAuth API (v3)")
+templates = Jinja2Templates(directory="templates")
 
 app.add_middleware(
     CORSMiddleware,
@@ -12,31 +16,34 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-COMPOSIO_API_KEY = os.getenv("COMPOSIO_API_KEY")   # 必填：Composio API Key
-AUTH_CONFIG_ID   = os.getenv("AUTH_CONFIG_ID")     # 必填：ac_ 開頭的 Auth Config ID
-BASE_URL = "https://backend.composio.dev/api/v3"   # v3 前綴
+COMPOSIO_API_KEY = os.getenv("COMPOSIO_API_KEY")
+AUTH_CONFIG_ID   = os.getenv("AUTH_CONFIG_ID")
+BASE_URL = "https://backend.composio.dev/api/v3"
 
 def headers():
     if not COMPOSIO_API_KEY or not AUTH_CONFIG_ID:
-        raise RuntimeError("環境變數缺少 COMPOSIO_API_KEY 或 AUTH_CONFIG_ID")
+        raise RuntimeError("缺少 COMPOSIO_API_KEY 或 AUTH_CONFIG_ID")
     return {"X-API-Key": COMPOSIO_API_KEY, "Content-Type": "application/json"}
 
-@app.get("/")
+@app.get("/", response_model=dict)
 def root():
     return {"status": "ok", "api_version": "v3"}
 
+# 成功頁面：請把 callback_url 指到這個路由
+@app.get("/oauth/success", response_class=HTMLResponse)
+async def oauth_success(request: Request):
+    return templates.TemplateResponse("oauth_success.html", {"request": request})
+
 @app.post("/create-auth-link")
 async def create_auth_link(
-    user_id: str = Query(..., description="你的使用者 ID（例如 LINE User ID）"),
-    callback_url: str = Query("https://your-app.com/oauth/success", description="授權完成後導回的網址")
+    user_id: str = Query(..., description="使用者 ID"),
+    callback_url: str = Query(None, description="授權完成導回網址")
 ):
-    """
-    1) 建立 Connected Account（把 user_id 綁到 connection.entity.id）
-    2) 若未回傳 redirectUrl，補呼叫 auth_sessions 產生 OAuth 登入連結
-    """
+    if not callback_url:
+        callback_url = "https://composio.zeabur.app/oauth/success"
     try:
         async with httpx.AsyncClient(timeout=30.0) as client:
-            # 1) v3：建立 connected account（正確欄位：auth_config + connection.entity.id）
+            # 1) 建立 connected account（v3）
             r = await client.post(
                 f"{BASE_URL}/connected_accounts",
                 headers=headers(),
@@ -54,10 +61,10 @@ async def create_auth_link(
             connection_id = created.get("id")
             redirect_url  = created.get("redirectUrl")
 
-            # 2) 若沒有登入 URL → 建立 auth‑link session（公開端點）
+            # 2) 若無登入 URL → 用公開端點補建 auth‑link
             if not redirect_url:
                 link = await client.post(
-                    f"{BASE_URL}/auth_sessions",
+                    f"{BASE_URL}/connected_accounts/link",
                     headers=headers(),
                     json={
                         "connectionId": connection_id,
@@ -80,9 +87,6 @@ async def create_auth_link(
 
 @app.get("/check-connection/{user_id}")
 async def check_connection(user_id: str):
-    """
-    依 entityId 查詢該使用者是否已授權（ACTIVE） 
-    """
     try:
         async with httpx.AsyncClient(timeout=30.0) as client:
             r = await client.get(
