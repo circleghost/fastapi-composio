@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>授權成功 - Google Sheets 已連接</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body class="bg-gradient-to-br from-blue-50 via-white to-green-50 min-h-screen flex items-center justify-center p-4">
+    <div class="max-w-md w-full">
+        <!-- 成功卡片 -->
+        <div class="bg-white rounded-2xl shadow-2xl p-8 transform transition-all duration-500 hover:scale-105">
+            <!-- 成功圖示 -->
+            <div class="flex justify-center mb-6">
+                <div class="relative">
+                    <div class="w-24 h-24 bg-green-100 rounded-full flex items-center justify-center animate-pulse">
+                        <i class="fas fa-check text-5xl text-green-500"></i>
+                    </div>
+                    <div class="absolute -top-2 -right-2">
+                        <div class="w-8 h-8 bg-blue-500 rounded-full flex items-center justify-center">
+                            <i class="fab fa-google text-white text-sm"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 標題 -->
+            <h1 class="text-3xl font-bold text-center text-gray-800 mb-3">
+                授權成功！
+            </h1>
+            
+            <!-- 描述 -->
+            <p class="text-center text-gray-600 mb-6">
+                你的 Google Sheets 帳號已成功連接，現在可以開始使用智能助手操作試算表了。
+            </p>
+
+            <!-- 功能列表 -->
+            <div class="space-y-3 mb-8">
+                <div class="flex items-center space-x-3 text-gray-700">
+                    <div class="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center flex-shrink-0">
+                        <i class="fas fa-table text-blue-600"></i>
+                    </div>
+                    <div>
+                        <p class="font-semibold">讀取試算表</p>
+                        <p class="text-sm text-gray-500">查詢資料、統計分析</p>
+                    </div>
+                </div>
+                
+                <div class="flex items-center space-x-3 text-gray-700">
+                    <div class="w-10 h-10 bg-green-100 rounded-lg flex items-center justify-center flex-shrink-0">
+                        <i class="fas fa-edit text-green-600"></i>
+                    </div>
+                    <div>
+                        <p class="font-semibold">編輯內容</p>
+                        <p class="text-sm text-gray-500">新增、修改、刪除資料</p>
+                    </div>
+                </div>
+                
+                <div class="flex items-center space-x-3 text-gray-700">
+                    <div class="w-10 h-10 bg-purple-100 rounded-lg flex items-center justify-center flex-shrink-0">
+                        <i class="fas fa-robot text-purple-600"></i>
+                    </div>
+                    <div>
+                        <p class="font-semibold">AI 自動化</p>
+                        <p class="text-sm text-gray-500">智能助手隨時待命</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 關閉按鈕 -->
+            <button onclick="window.close()" 
+                    class="w-full bg-gradient-to-r from-blue-500 to-green-500 text-white font-semibold py-3 px-6 rounded-xl hover:from-blue-600 hover:to-green-600 transition-all duration-300 transform hover:-translate-y-1 shadow-lg">
+                <i class="fas fa-times-circle mr-2"></i>關閉視窗
+            </button>
+
+            <!-- 提示訊息 -->
+            <p class="text-center text-sm text-gray-500 mt-4">
+                現在可以回到對話繼續操作
+            </p>
+        </div>
+
+        <!-- 底部資訊 -->
+        <div class="text-center mt-6">
+            <p class="text-sm text-gray-500">
+                <i class="fas fa-shield-alt mr-1"></i>
+                你的資料安全受到保護
+            </p>
+        </div>
+    </div>
+
+    <!-- 動畫效果 -->
+    <script>
+        // 頁面載入動畫
+        document.addEventListener('DOMContentLoaded', function() {
+            const card = document.querySelector('.bg-white');
+            card.classList.add('animate-fade-in');
+        });
+
+        // 3 秒後自動關閉（可選）
+        // setTimeout(() => window.close(), 3000);
+    </script>
+</body>
+</html>
