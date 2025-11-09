@@ -15,7 +15,6 @@ app.add_middleware(
 
 # 環境變數
 COMPOSIO_API_KEY = os.getenv("COMPOSIO_API_KEY")
-AUTH_CONFIG_ID = os.getenv("AUTH_CONFIG_ID")
 
 # 初始化 Composio
 composio_client = Composio(api_key=COMPOSIO_API_KEY)
@@ -25,20 +24,18 @@ def read_root():
     return {
         "status": "ok",
         "service": "Composio OAuth API",
-        "endpoints": {
-            "check_connection": "GET /check-connection/{user_id}",
-            "create_auth_link": "POST /create-auth-link?user_id=xxx"
-        }
+        "version": "1.0.0"
     }
 
 @app.post("/create-auth-link")
 async def create_auth_link(user_id: str = Query(..., description="使用者 ID")):
     """為使用者建立 Google Sheets 授權連結"""
     try:
-        # 注意：Composio SDK 使用 entity_id，不是 user_id
+        # 正確的參數：user_id（不是 entity_id）
+        # 不需要 auth_config_id，改用 integration_id
         connection_request = composio_client.connected_accounts.initiate(
-            entity_id=user_id,  # ← 改成 entity_id
-            auth_config_id=AUTH_CONFIG_ID
+            user_id=user_id,
+            integration_id="googlesheets"  # 直接用 integration_id
         )
         
         return {
@@ -57,11 +54,12 @@ async def create_auth_link(user_id: str = Query(..., description="使用者 ID")
 async def check_connection(user_id: str):
     """檢查使用者是否已授權 Google Sheets"""
     try:
-        # 注意：這裡也要改成 entity_ids
+        # list() 方法使用 user_id 參數（單數）
         accounts = composio_client.connected_accounts.list(
-            entity_ids=[user_id]  # ← 改成 entity_ids
+            user_id=user_id
         )
         
+        # 檢查是否有 ACTIVE 狀態的帳號
         for account in accounts.items:
             if account.status == "ACTIVE":
                 return {
