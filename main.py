@@ -29,7 +29,6 @@ def headers():
 def root():
     return {"status": "ok", "api_version": "v3"}
 
-# 成功頁面：請把 callback_url 指到這個路由
 @app.get("/oauth/success", response_class=HTMLResponse)
 async def oauth_success(request: Request):
     return templates.TemplateResponse("oauth_success.html", {"request": request})
@@ -43,7 +42,7 @@ async def create_auth_link(
         callback_url = "https://composio.zeabur.app/oauth/success"
     try:
         async with httpx.AsyncClient(timeout=30.0) as client:
-            # 1) 建立 connected account（v3）
+            # 1) 建立 connected account（v3 正確 payload）
             r = await client.post(
                 f"{BASE_URL}/connected_accounts",
                 headers=headers(),
@@ -61,7 +60,17 @@ async def create_auth_link(
             connection_id = created.get("id")
             redirect_url  = created.get("redirectUrl")
 
-            # 2) 若無登入 URL → 用公開端點補建 auth‑link
+            # 2) 沒有即時回傳連結 → 先查詳情取 redirectUrl
+            if not redirect_url:
+                det = await client.get(
+                    f"{BASE_URL}/connected_accounts/{connection_id}",
+                    headers={"X-API-Key": COMPOSIO_API_KEY}
+                )
+                if det.status_code in (200, 201):
+                    got = det.json()
+                    redirect_url = got.get("redirectUrl")
+
+            # 3) 仍然沒有 → 用公開端點補建 auth-link（v3）
             if not redirect_url:
                 link = await client.post(
                     f"{BASE_URL}/connected_accounts/link",
