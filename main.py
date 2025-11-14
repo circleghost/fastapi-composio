@@ -3,9 +3,10 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
 from starlette.requests import Request
-import httpx, os
+from composio import Composio
+import os
 
-app = FastAPI(title="Composio OAuth API (v3)")
+app = FastAPI(title="Composio OAuth API")
 templates = Jinja2Templates(directory="templates")
 
 app.add_middleware(
@@ -16,18 +17,16 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# 環境變數
 COMPOSIO_API_KEY = os.getenv("COMPOSIO_API_KEY")
-AUTH_CONFIG_ID   = os.getenv("AUTH_CONFIG_ID")
-BASE_URL = "https://backend.composio.dev/api/v3"
+AUTH_CONFIG_ID = os.getenv("AUTH_CONFIG_ID")
 
-def headers():
-    if not COMPOSIO_API_KEY or not AUTH_CONFIG_ID:
-        raise RuntimeError("缺少 COMPOSIO_API_KEY 或 AUTH_CONFIG_ID")
-    return {"X-API-Key": COMPOSIO_API_KEY, "Content-Type": "application/json"}
+# 初始化 Composio SDK
+composio_client = Composio(api_key=COMPOSIO_API_KEY)
 
 @app.get("/")
 def root():
-    return {"status": "ok", "api_version": "v3"}
+    return {"status": "ok", "service": "Composio OAuth API"}
 
 @app.get("/oauth/success", response_class=HTMLResponse)
 async def oauth_success(request: Request):
@@ -36,83 +35,50 @@ async def oauth_success(request: Request):
 @app.post("/create-auth-link")
 async def create_auth_link(
     user_id: str = Query(..., description="使用者 ID"),
-    callback_url: str = Query(None, description="授權完成導回網址")
+    callback_url: str = Query(None, description="授權完成後導回的網址")
 ):
+    """
+    使用 Composio SDK 的 ConnectedAccounts.link() 建立授權連結
+    根據官方文件：https://docs.composio.dev/sdk/python/connected_accounts#link
+    """
     if not callback_url:
         callback_url = "https://composio.zeabur.app/oauth/success"
     
     try:
-        async with httpx.AsyncClient(timeout=30.0) as client:
-            # 1) 建立 connected account（v3）
-            r = await client.post(
-                f"{BASE_URL}/connected_accounts",
-                headers=headers(),
-                json={
-                    "auth_config": { "id": AUTH_CONFIG_ID },
-                    "connection": {
-                        "entity": { "id": user_id },
-                        "callback_url": callback_url
-                    }
-                }
-            )
-            if r.status_code not in (200, 201):
-                raise HTTPException(status_code=r.status_code, detail=f"建立連線錯誤: {r.text}")
-            
-            created = r.json()
-            connection_id = created.get("id")
-            redirect_url  = created.get("redirectUrl")
-
-            # 2) 若沒有即時拿到 URL → 查詳情
-            if not redirect_url:
-                det = await client.get(
-                    f"{BASE_URL}/connected_accounts/{connection_id}",
-                    headers={"X-API-Key": COMPOSIO_API_KEY}
-                )
-                if det.status_code == 200:
-                    got = det.json()
-                    redirect_url = got.get("redirectUrl")
-
-            # 3) 仍然沒有 → 補建 auth-link（只需 connectionId + callback_url）
-            if not redirect_url:
-                link = await client.post(
-                    f"{BASE_URL}/connected_accounts/link",
-                    headers=headers(),
-                    json={
-                        "connectionId": connection_id,
-                        "callback_url": callback_url
-                    }
-                )
-                if link.status_code not in (200, 201):
-                    raise HTTPException(status_code=link.status_code, detail=f"Create auth-link 錯誤: {link.text}")
-                payload = link.json()
-                redirect_url = payload.get("url") or payload.get("redirectUrl")
-
-            return {
-                "success": True,
-                "redirect_url": redirect_url,
-                "connection_id": connection_id,
-                "user_id": user_id
-            }
-    except httpx.HTTPError as e:
-        raise HTTPException(status_code=500, detail=f"HTTP 請求失敗: {str(e)}")
+        # 使用 SDK 的 link() 方法建立授權連結
+        connection_request = composio_client.connected_accounts.link(
+            user_id=user_id,
+            auth_config_id=AUTH_CONFIG_ID,
+            callback_url=callback_url
+        )
+        
+        return {
+            "success": True,
+            "redirect_url": connection_request.redirectUrl,
+            "connection_id": connection_request.id,
+            "user_id": user_id
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"建立授權連結失敗: {str(e)}")
 
 @app.get("/check-connection/{user_id}")
 async def check_connection(user_id: str):
+    """
+    檢查使用者是否已授權
+    """
     try:
-        async with httpx.AsyncClient(timeout=30.0) as client:
-            r = await client.get(
-                f"{BASE_URL}/connected_accounts",
-                headers={"X-API-Key": COMPOSIO_API_KEY},
-                params={"entityId": user_id}
-            )
-        if r.status_code != 200:
-            return {"connected": False, "user_id": user_id}
+        # 使用 SDK 列出該使用者的 connected accounts
+        accounts = composio_client.connected_accounts.list(user_id=user_id)
         
-        items = (r.json() or {}).get("items", []) or []
-        for acc in items:
-            if acc.get("status") == "ACTIVE":
-                return {"connected": True, "account_id": acc.get("id"), "user_id": user_id}
+        # 檢查是否有 ACTIVE 狀態的帳號
+        for account in accounts.items:
+            if account.status == "ACTIVE":
+                return {
+                    "connected": True,
+                    "account_id": account.id,
+                    "user_id": user_id
+                }
         
         return {"connected": False, "user_id": user_id}
-    except httpx.HTTPError as e:
+    except Exception as e:
         raise HTTPException(status_code=500, detail=f"檢查連線失敗: {str(e)}")
