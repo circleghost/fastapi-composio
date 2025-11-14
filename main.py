@@ -38,15 +38,15 @@ async def create_auth_link(
     callback_url: str = Query(None, description="授權完成後導回的網址")
 ):
     """
-    使用 Composio SDK 的 ConnectedAccounts.link() 建立授權連結
-    根據官方文件：https://docs.composio.dev/sdk/python/connected_accounts#link
+    使用 Composio SDK 的 ConnectedAccounts.initiate() 建立授權連結
+    根據官方範例：https://github.com/ComposioHQ/composio-fastapi
     """
     if not callback_url:
         callback_url = "https://composio.zeabur.app/oauth/success"
     
     try:
-        # 使用 SDK 的 link() 方法建立授權連結
-        connection_request = composio_client.connected_accounts.link(
+        # 使用 SDK 的 initiate() 方法建立授權連結
+        connection_request = composio_client.connected_accounts.initiate(
             user_id=user_id,
             auth_config_id=AUTH_CONFIG_ID,
             callback_url=callback_url
@@ -54,7 +54,7 @@ async def create_auth_link(
         
         return {
             "success": True,
-            "redirect_url": connection_request.redirectUrl,
+            "redirect_url": connection_request.redirect_url,  # ← 使用底線命名
             "connection_id": connection_request.id,
             "user_id": user_id
         }
@@ -68,10 +68,12 @@ async def check_connection(user_id: str):
     """
     try:
         # 使用 SDK 列出該使用者的 connected accounts
-        accounts = composio_client.connected_accounts.list(user_id=user_id)
+        connected_accounts = composio_client.connected_accounts.list(
+            user_ids=[user_id]  # ← 注意：list() 方法接受 user_ids（複數）
+        )
         
         # 檢查是否有 ACTIVE 狀態的帳號
-        for account in accounts.items:
+        for account in connected_accounts.items:
             if account.status == "ACTIVE":
                 return {
                     "connected": True,
